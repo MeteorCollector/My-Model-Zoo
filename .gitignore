@@ -1,0 +1,11 @@
+./data
+*.pyc
+*.jpg
+*.png
+*.wav
+*.gif
+*.pth
+./__pycache__
+*.vs
+*.vscode
+*.mp4
