@@ -20,7 +20,7 @@ class MyLeNet(Module):
         # in the paper, input x is 32 * 32
         # but MNIST is 28 * 28
         # therefore padding is needed since feature map here is 4 * 4
-        self.conv5 = nn.Conv2d(16, 120, 4)
+        self.conv5 = nn.Conv2d(16, 120, 5, padding=True)
         self.relu5 = nn.ReLU()
 
         # this additional linear layer
