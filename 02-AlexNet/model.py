@@ -13,24 +13,33 @@ class MyAlexNet(Module):
         self.conv_module = nn.Sequential(
             # 1
             nn.Conv2d(3, 96, 11, stride=4, padding=3),
+            nn.BatchNorm2d(96),
             nn.ReLU(),
             nn.MaxPool2d(3, stride=2),
 
             # 2
-            nn.Conv2d(96, 256, 5),
+            # nn.Conv2d(96, 256, 5),
+            nn.Conv2d(96, 192, 5),
+            nn.BatchNorm2d(192),
             nn.ReLU(),
             nn.MaxPool2d(3, stride=2),
 
             # 3
-            nn.Conv2d(256, 384, 3),
+            # nn.Conv2d(256, 384, 3),
+            nn.Conv2d(192, 384, 3),
+            nn.BatchNorm2d(384),
             nn.ReLU(),
 
             # 4
-            nn.Conv2d(384, 384, 3),
+            # nn.Conv2d(384, 384, 3),
+            nn.Conv2d(384, 256, 3),
+            nn.BatchNorm2d(256),
             nn.ReLU(),
 
             # 5
-            nn.Conv2d(384, 256, 3),
+            # nn.Conv2d(384, 256, 3),
+            nn.Conv2d(256, 256, 3),
+            nn.BatchNorm2d(256),
             nn.ReLU(),
         )
 

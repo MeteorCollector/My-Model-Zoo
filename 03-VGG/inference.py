@@ -1,4 +1,5 @@
-from model import MyAlexNet
+from model import MyVGG
+from dataset import data_loader
 import os
 import torch
 from torchvision.datasets import CIFAR10
@@ -10,19 +11,22 @@ from torch.autograd import Variable
 
 if __name__ == '__main__':
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    batch_size = 256
-    model = MyAlexNet().to(device)
+
+    batch_size = 32
+
+    model = MyVGG().to(device)
     print(f"using device: {device}")
 
     # load pkl
-    files = glob.glob('./models/alex_*.pkl')
+    files = glob.glob('./models/vgg_*.pkl')
     max_file = max(files, key=lambda x: float(x.split('_')[-1][:-4]))
     with open(max_file, 'rb') as f:
         model = torch.load(max_file)
     print("Loaded pkl from:", max_file)
 
-    test_dataset = CIFAR10(root='../data/CIFAR10', train=False, transform=ToTensor())
-    test_loader = DataLoader(test_dataset, batch_size=batch_size)
+    test_loader = data_loader(data_dir='../data/CIFAR100',
+                              batch_size=batch_size,
+                              test=True)
     
     # evaluate
     all_correct_num = 0

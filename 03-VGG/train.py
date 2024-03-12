@@ -1,11 +1,9 @@
-from model import MyAlexNet
+from model import MyVGG
+from dataset import data_loader
 import numpy as np
 import os
 import torch
-from torchvision.datasets import CIFAR10
 from torch.nn import CrossEntropyLoss
-from torch.utils.data import DataLoader
-import torchvision.transforms as transforms
 from torch.autograd import Variable
 from tqdm import tqdm
 import glob
@@ -15,43 +13,29 @@ if __name__ == '__main__':
     # hardware
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     print(f"using device: {device}")
-    batch_size = 256
-
-    # preprocess image
-    transform = transforms.Compose([
-        transforms.Resize([224, 224]),
-        transforms.ToTensor(),
-        transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
-    ])
-
-    # divide train and test
-    train_dataset = CIFAR10(root='../data/CIFAR10', train=True, transform=transform, download=True)
-    test_dataset = CIFAR10(root='../data/CIFAR10', train=False, transform=transform)
     
-    # loada data
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True)
+    num_classes = 100
+    batch_size = 32
+    learning_rate = 0.003
+    weight_decay = 0.005
 
-    # config data
-    alex_config = \
-    {
-        'lr': 1e-3,                   # learning rate
-        'l2_regularization':1e-4,     # L2 regularization efficient
-        'num_classes': 10,
-    }
+    # CIFAR100 dataset 
+    train_loader, valid_loader = data_loader(data_dir='../data/CIFAR100',
+                                         batch_size=batch_size)
+
 
     # define model
-    model = MyAlexNet(alex_config).to(device)
+    model = MyVGG(num_classes).to(device)
 
     # load pkl from historical ones
-    files = glob.glob('./models/alex_*.pkl')
+    files = glob.glob('./models/vgg_*.pkl')
     if files:
         max_file = max(files, key=lambda x: float(x.split('_')[-1][:-4]))
         with open(max_file, 'rb') as f:
             model = torch.load(max_file)
         print("Loaded pkl from:", max_file)
 
-    opt = torch.optim.Adam(model.parameters(), lr=alex_config['lr'], weight_decay=alex_config['l2_regularization'])
+    opt = torch.optim.SGD(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
     loss_fn = CrossEntropyLoss()
     all_epoch = 20
     prev_acc = 0
@@ -81,7 +65,7 @@ if __name__ == '__main__':
 
         model.eval()
         print(f"epoch {epoch_count}: evaluating")
-        for idx, (images, labels) in tqdm(enumerate(test_loader)):
+        for idx, (images, labels) in tqdm(enumerate(valid_loader)):
 
             # load data
             images = Variable(images).to(device)
@@ -103,7 +87,7 @@ if __name__ == '__main__':
         # save model
         if not os.path.isdir("models"):
             os.mkdir("models")
-        torch.save(model, 'models/alex_{:.3f}.pkl'.format(acc))
+        torch.save(model, 'models/vgg_{:.3f}.pkl'.format(acc))
         if np.abs((acc - prev_acc).cpu()) < 1e-4:
             break
         prev_acc = acc
