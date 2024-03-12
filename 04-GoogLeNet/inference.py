@@ -1,4 +1,4 @@
-from model import MyVGG
+from model import MyInceptionNet
 from dataset import data_loader
 import torch
 import glob
@@ -10,11 +10,11 @@ if __name__ == '__main__':
 
     batch_size = 32
 
-    model = MyVGG().to(device)
+    model = MyInceptionNet().to(device)
     print(f"using device: {device}")
 
     # load pkl
-    files = glob.glob('./models/vgg_*.pkl')
+    files = glob.glob('./models/inception_*.pkl')
     max_file = max(files, key=lambda x: float(x.split('_')[-1][:-4]))
     with open(max_file, 'rb') as f:
         model = torch.load(max_file)
