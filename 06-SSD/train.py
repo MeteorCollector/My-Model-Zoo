@@ -29,7 +29,7 @@ if __name__ == '__main__':
 
 
     # define model
-    model = MyResNet34(num_classes).to(device)
+    model = MyResNet50(num_classes).to(device)
 
     # load pkl from historical ones
     files = glob.glob('./models/res_*.pkl')

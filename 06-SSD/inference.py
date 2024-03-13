@@ -14,7 +14,7 @@ if __name__ == '__main__':
 
     batch_size = 32
 
-    model = MyResNet34().to(device)
+    model = MyResNet50().to(device)
     print(f"using device: {device}")
 
     # load pkl
