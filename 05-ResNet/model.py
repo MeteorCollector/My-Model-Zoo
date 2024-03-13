@@ -33,19 +33,19 @@ class BasicBlock(nn.Module):
         #       |ReLU
         #    output
 
-        self.conv1 = ConvBlock(in_channel, out_channel, 3, stride=stride, padding=1, bias=False)
+        self.conv1 = ConvBlock(in_channel, out_channel, kernel_size=3, stride=stride, padding=1, bias=False)
         
         self.conv2 = nn.Sequential(
-            nn.Conv2d(out_channel, out_channel, 3, stride=1, padding=1, bias=False),
+            nn.Conv2d(out_channel, out_channel, kernel_size=3, stride=1, padding=1, bias=False),
             nn.BatchNorm2d(out_channel),
             # no ReLU here
         )
 
         self.shortcut = nn.Sequential()
 
-        if stride is not 1:
+        if stride != 1:
             self.shortcut = nn.Sequential(
-                nn.Conv2d(in_channel, out_channel, 3, stride=stride, padding=0, bias=False),
+                nn.Conv2d(in_channel, out_channel, kernel_size=3, stride=stride, padding=0, bias=False),
                 nn.BatchNorm2d(out_channel),
             )
         
@@ -64,7 +64,7 @@ class BottleNeck(nn.Module):
     expansion = 4
     # downsample: a 1x1 convolution
     def __init__(self, in_channel, out_channel, stride=1):
-        super(BasicBlock, self).__init__()
+        super(BottleNeck, self).__init__()
 
         #     input (256channel)
         #       +----------+
@@ -78,18 +78,18 @@ class BottleNeck(nn.Module):
         #       |ReLU
         #    output
 
-        self.conv1 = ConvBlock(in_channel, out_channel, 1, stride=1, padding=1, bias=False)
+        self.conv1 = ConvBlock(in_channel, out_channel, kernel_size=1, stride=1, padding=0, bias=False)
 
-        self.conv2 = ConvBlock(out_channel, out_channel, 3, stride=stride, padding=1, bias=False)
+        self.conv2 = ConvBlock(out_channel, out_channel, kernel_size=3, stride=stride, padding=1, bias=False)
         
         self.conv3 = nn.Sequential(
-            nn.Conv2d(out_channel, out_channel * self.expansion, 1, stride=1, padding=1, bias=False),
-            nn.BatchNorm2d(out_channel),
+            nn.Conv2d(out_channel, out_channel * self.expansion, kernel_size=1, stride=1, padding=0, bias=False),
+            nn.BatchNorm2d(out_channel * self.expansion),
             # no ReLU here
         )
 
         self.shortcut = nn.Sequential(
-            nn.Conv2d(in_channel, out_channel * self.expansion, 1, stride=stride, padding=0, bias=False),
+            nn.Conv2d(in_channel, out_channel * self.expansion, kernel_size=1, stride=stride, padding=0, bias=False),
             nn.BatchNorm2d(out_channel * self.expansion),
         )
 
@@ -106,7 +106,7 @@ class BottleNeck(nn.Module):
 
 class MyResNet(nn.Module):
 
-    def __init__(self, block, block_num_group, num_classes=1000, include_top=True):#block残差结构 include_top为了之后搭建更加复杂的网络
+    def __init__(self, block, block_num_group, num_classes=1000):
         super(MyResNet, self).__init__()
         self.in_channel = 64
         self.block = block
@@ -138,18 +138,34 @@ class MyResNet(nn.Module):
         for i in range(len(stride_list)):
             layer_name = f"block_{index}_{i}"
             layers.add_module(layer_name, self.block(self.in_channel, channel, stride_list[i]))
-            self.channel = channel * self.block.expansion
+            self.in_channel = channel * self.block.expansion
         return layers
     
     def forward(self, x):
-        
+
         y = self.top_layers(x)
         y = self.conv2(y)
         y = self.conv3(y)
         y = self.conv4(y)
         y = self.conv5(y)
         y = self.outpool(y)
-        y = torch.flatten(y, 0)
-        y =self.fc(y)
-        y = nn.functional.softmax(y)
+        y = torch.flatten(y, 1)
+        y = self.fc(y)
+        y = nn.functional.softmax(y, dim=1)
         return y
+
+
+def MyResNet18(num_classes=1000):
+    return MyResNet(block=BasicBlock, block_num_group=[2, 2, 2, 2], num_classes=num_classes)
+
+def MyResNet34(num_classes=1000):
+    return MyResNet(block=BasicBlock, block_num_group=[3, 4, 6, 3], num_classes=num_classes)
+
+def MyResNet50(num_classes=1000):
+    return MyResNet(block=BottleNeck, block_num_group=[3, 4, 6, 3], num_classes=num_classes)
+
+def MyResNet101(num_classes=1000):
+    return MyResNet(block=BottleNeck, block_num_group=[3, 4, 23, 3], num_classes=num_classes)
+
+def MyResNet152(num_classes=1000):
+    return MyResNet(block=BottleNeck, block_num_group=[3, 8, 36, 3], num_classes=num_classes)

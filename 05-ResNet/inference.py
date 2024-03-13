@@ -1,4 +1,8 @@
-from model import MyInceptionNet
+from model import MyResNet18
+from model import MyResNet34
+from model import MyResNet50
+from model import MyResNet101
+from model import MyResNet152
 from dataset import data_loader
 import torch
 import glob
@@ -10,11 +14,11 @@ if __name__ == '__main__':
 
     batch_size = 32
 
-    model = MyInceptionNet().to(device)
+    model = MyResNet50().to(device)
     print(f"using device: {device}")
 
     # load pkl
-    files = glob.glob('./models/inception_*.pkl')
+    files = glob.glob('./models/res_*.pkl')
     max_file = max(files, key=lambda x: float(x.split('_')[-1][:-4]))
     with open(max_file, 'rb') as f:
         model = torch.load(max_file)

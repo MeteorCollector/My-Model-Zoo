@@ -1,4 +1,8 @@
-from model import MyInceptionNet
+from model import MyResNet18
+from model import MyResNet34
+from model import MyResNet50
+from model import MyResNet101
+from model import MyResNet152
 from dataset import data_loader
 import numpy as np
 import os
@@ -25,10 +29,10 @@ if __name__ == '__main__':
 
 
     # define model
-    model = MyInceptionNet(num_classes).to(device)
+    model = MyResNet50(num_classes).to(device)
 
     # load pkl from historical ones
-    files = glob.glob('./models/inception_*.pkl')
+    files = glob.glob('./models/res_*.pkl')
     if files:
         max_file = max(files, key=lambda x: float(x.split('_')[-1][:-4]))
         with open(max_file, 'rb') as f:
@@ -87,7 +91,7 @@ if __name__ == '__main__':
         # save model
         if not os.path.isdir("models"):
             os.mkdir("models")
-        torch.save(model, 'models/inception_{:.3f}.pkl'.format(acc))
+        torch.save(model, 'models/res_{:.3f}.pkl'.format(acc))
         if np.abs((acc - prev_acc).cpu()) < 1e-4:
             break
         prev_acc = acc
