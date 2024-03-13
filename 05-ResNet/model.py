@@ -104,28 +104,52 @@ class BottleNeck(nn.Module):
         
         return y
 
-class ResNet(nn.Module):
+class MyResNet(nn.Module):
 
-    def __init__(self, block, blocks_num, num_classes=1000, include_top=True):#block残差结构 include_top为了之后搭建更加复杂的网络
-        super(ResNet, self).__init__()
+    def __init__(self, block, block_num_group, num_classes=1000, include_top=True):#block残差结构 include_top为了之后搭建更加复杂的网络
+        super(MyResNet, self).__init__()
         self.in_channel = 64
+        self.block = block
 
-    def __make_layer(self, block, channel, block_num, stride=1):
-        
-        downsample = None
-        if stride != 1 or self.in_channel != channel + block.expansion:
-            downsample = nn.Sequential(
-                nn.Conv2d(self.in_channel, channel * block.expansion, 1, stride=stride)
-            )
-        
-        layers = []
-        layers.append(block(self.in_channel, channel, downsample, stride=stride))
-        self.in_channel = channel * block.expansion
+        self.top_layers = nn.Sequential(
+            nn.Conv2d(3, self.in_channel, 7, stride=2, padding=3, bias=False),
+            nn.BatchNorm2d(self.in_channel),
+            nn.ReLU(),
+            nn.MaxPool2d(3, 2, 1),
+        )
 
-        for _ in range(1, block_num):
-            layers.append(block(self.in_channel, channel))
+        self.conv2 = self.__make_layer(channel=64,  block_num=block_num_group[0], index=2, stride=1)
+        self.conv3 = self.__make_layer(channel=128, block_num=block_num_group[1], index=3, stride=2)
+        self.conv4 = self.__make_layer(channel=256, block_num=block_num_group[2], index=4, stride=2)
+        self.conv5 = self.__make_layer(channel=512, block_num=block_num_group[3], index=5, stride=2)
+
+        self.outpool = nn.AvgPool2d(7)
+        self.fc      = nn.Linear(512 * self.block.expansion, num_classes)
+
+    def __make_layer(self, channel, block_num, index, stride=1):
         
-        return nn.Sequential(*layers)
+        # block:     block
+        # channel:   output channels of this group
+        # block_num: number of blocks
+
+        stride_list = [stride] + [1] * (block_num - 1)
+        # the first strides is 2, the others are ones.
+        layers = nn.Sequential()
+        for i in range(len(stride_list)):
+            layer_name = f"block_{index}_{i}"
+            layers.add_module(layer_name, self.block(self.in_channel, channel, stride_list[i]))
+            self.channel = channel * self.block.expansion
+        return layers
     
-    def forward(x):
-        return x
+    def forward(self, x):
+        
+        y = self.top_layers(x)
+        y = self.conv2(y)
+        y = self.conv3(y)
+        y = self.conv4(y)
+        y = self.conv5(y)
+        y = self.outpool(y)
+        y = torch.flatten(y, 0)
+        y =self.fc(y)
+        y = nn.functional.softmax(y)
+        return y
