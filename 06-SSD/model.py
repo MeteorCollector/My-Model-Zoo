@@ -1,39 +1,121 @@
 from torch.nn import Module
 from torch import nn
 import torch
-from vgg import vggs
+from math import sqrt
+from vgg import vgg
+from layers import PriorBox
+from torch.autograd import Function
+from torch.autograd import Variable
+import torch.nn.init as init
 
-class ExtraFeature(nn.Module):
-    # combine features of different scales
-    def __init__(self):
-        super(ExtraFeature, self).__init__()
-        
-        self.conv8_1  = nn.Conv2d(1024, 256, 1, stride=1)
-        self.conv8_2  = nn.Conv2d( 256, 512, 3, stride=2, padding=1)
-        self.conv9_1  = nn.Conv2d( 512, 128, 1, stride=1)
-        self.conv9_2  = nn.Conv2d( 128, 256, 3, stride=2, padding=1)
-        self.conv10_1 = nn.Conv2d( 256, 128, 1, stride=1)
-        self.conv10_2 = nn.Conv2d( 128, 256, 3, stride=1)
-        self.conv11_1 = nn.Conv2d( 256, 128, 1, stride=1)
-        self.conv11_2 = nn.Conv2d( 128, 256, 3, stride=1)
-    
+class L2Norm(nn.Module):
+    # L2 Normalize
+    def __init__(self, n_channels, scale):
+        super(L2Norm,self).__init__()
+        self.n_channels = n_channels
+        self.gamma = scale or None
+        self.eps = 1e-10
+        self.weight = nn.Parameter(torch.Tensor(self.n_channels))
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        init.constant_(self.weight,self.gamma)
+
     def forward(self, x):
-        y = self.conv8_1(x)
-        y = self.conv8_2(y)
-        y = self.conv9_1(y)
-        y = self.conv9_2(y)
-        y = self.conv10_1(y)
-        y = self.conv10_2(y)
-        y = self.conv11_1(y)
-        y = self.conv11_2(y)
-        return y
+        norm = x.pow(2).sum(dim=1, keepdim=True).sqrt()+self.eps
+        #x /= norm
+        x = torch.div(x,norm)
+        out = self.weight.unsqueeze(0).unsqueeze(2).unsqueeze(3).expand_as(x) * x
+        return out
 
-def multibox(vgg, extras, num_claases):
+
+
+def ExtraFeature():
+    # combine features of different scales
+    conv8_1  = nn.Conv2d(1024, 256, 1, stride=1)
+    conv8_2  = nn.Conv2d( 256, 512, 3, stride=2, padding=1)
+    conv9_1  = nn.Conv2d( 512, 128, 1, stride=1)
+    conv9_2  = nn.Conv2d( 128, 256, 3, stride=2, padding=1)
+    conv10_1 = nn.Conv2d( 256, 128, 1, stride=1)
+    conv10_2 = nn.Conv2d( 128, 256, 3, stride=1)
+    conv11_1 = nn.Conv2d( 256, 128, 1, stride=1)
+    conv11_2 = nn.Conv2d( 128, 256, 3, stride=1)
+    
+    return [conv8_1, conv8_2, conv9_1, conv9_2, conv10_1, conv10_2, conv11_1, conv11_2]
+
+def MultiBox(vgg, extras, num_classes):
+
+    # reference in paper:
+    #
+    # We initialize the parameters
+    # for all the newly added convolutional layers 
+    # with the ”xavier” method [20]. 
+    # For conv4_3, conv10_2 and conv11_2,
+    # we only associate 4 default boxes at each feature map location
+    # – omitting aspect ratios of 1/3 and 3.
+    # For all other layers, we put 6 default boxes as
+    # described in Sec. 2.2. 
+
     loc_layers  = []
     conf_layers = []
 
-    loc1 = nn.Conv2d(vgg[21].out_channels, 4)
+    # location prediction (bounding-box regression) layer
+    loc1 = nn.Conv2d(  vgg[21].out_channels, 4 * 4, 3, stride=1) # conv4_3 
+    loc2 = nn.Conv2d(  vgg[-2].out_channels, 6 * 4, 3, stride=1) # conv7
+    loc3 = nn.Conv2d(extras[1].out_channels, 6 * 4, 3, stride=1) # exts1_2
+    loc4 = nn.Conv2d(extras[3].out_channels, 6 * 4, 3, stride=1) # exts2_2
+    loc5 = nn.Conv2d(extras[5].out_channels, 4 * 4, 3, stride=1) # exts3_2
+    loc6 = nn.Conv2d(extras[7].out_channels, 4 * 4, 3, stride=1) # exts4_2
+    loc_layers = [loc1, loc2, loc3, loc4, loc5, loc6]
 
+    # classifier layer
+    conf1 = nn.Conv2d(  vgg[21].out_channels, 4 * num_classes, 3, stride=1) # conv4_3 
+    conf2 = nn.Conv2d(  vgg[-2].out_channels, 6 * num_classes, 3, stride=1) # conv7
+    conf3 = nn.Conv2d(extras[1].out_channels, 6 * num_classes, 3, stride=1) # exts1_2
+    conf4 = nn.Conv2d(extras[3].out_channels, 6 * num_classes, 3, stride=1) # exts2_2
+    conf5 = nn.Conv2d(extras[5].out_channels, 4 * num_classes, 3, stride=1) # exts3_2
+    conf6 = nn.Conv2d(extras[7].out_channels, 4 * num_classes, 3, stride=1) # exts4_2
+    conf_layers = [conf1, conf2, conf3, conf4, conf5, conf6]
+
+    return loc_layers, conf_layers
+
+
+
+class MySSD(nn.Module):
+
+    # reference: https://hellozhaozheng.github.io/z_post/PyTorch-SSD/#build_ssd
+
+    # SSD网络是由 VGG 网络后接 multibox 卷积层 组成的, 每一个 multibox 层会有如下分支:
+    # - 用于class conf scores的卷积层
+    # - 用于localization predictions的卷积层
+    # - 与priorbox layer相关联, 产生默认的bounding box
+
+    # 参数:
+    # phase: test/train
+    # size: 输入图片的尺寸
+    # base: VGG16的层
+    # extras: 将输出结果送到multibox loc和conf layers的额外的层
+    # head: "multibox head", 包含一系列的loc和conf卷积层.
+
+    def __init__(self, phase, size, base, extras, head, num_classes):
+        super(MySSD, self).__init__()
+        self.phase = phase
+        self.num_classes = num_classes
+
+        # 如果num_classes=21，则选择coco，否则选择voc
+        self.cfg = (coco, voc)[num_classes == 21]
+        self.priorbox = PriorBox(self.cfg)
+        # from torch.autograd import Variable
+        self.priors = Variable(self.priorbox.forward(), volatile=True)
+        self.size = size
+
+        self.vgg = nn.ModuleList(base)
+        self.L2Norm = L2Norm(512, 20)
+        self.extras = nn.ModuleList(extras)
+
+        # head = (loc_layers, conf_layers)
+        self.loc = nn.ModuleList(head[0]) 
+        self.conf = nn.ModuleList(head[1])
 
 
 class ConvBlock(nn.Module):
@@ -48,158 +130,3 @@ class ConvBlock(nn.Module):
         y = nn.functional.relu(y)
         return y
 
-
-class BasicBlock(nn.Module):
-    # output channel / input channel
-    # expands the shortcut
-    expansion = 1
-    # downsample: a 1x1 convolution
-    def __init__(self, in_channel, out_channel, stride=1):
-        super(BasicBlock, self).__init__()
-
-        #     input (64channel)
-        #       +----------+
-        # 3x3, 64channel   |
-        #       |ReLU      |
-        # 3x3, 64channel   |
-        #       |          |
-        #       +----------+
-        #       |ReLU
-        #    output
-
-        self.conv1 = ConvBlock(in_channel, out_channel, kernel_size=3, stride=stride, padding=1, bias=False)
-        
-        self.conv2 = nn.Sequential(
-            nn.Conv2d(out_channel, out_channel, kernel_size=3, stride=1, padding=1, bias=False),
-            nn.BatchNorm2d(out_channel),
-            # no ReLU here
-        )
-
-        self.shortcut = nn.Sequential()
-
-        if stride != 1:
-            self.shortcut = nn.Sequential(
-                nn.Conv2d(in_channel, out_channel, kernel_size=3, stride=stride, padding=0, bias=False),
-                nn.BatchNorm2d(out_channel),
-            )
-        
-    def forward(self, x):
-        y = self.conv1(x)
-        y = self.conv2(y)
-
-        y += self.shortcut(x)
-        y = nn.functional.relu(y)
-        
-        return y
-
-class BottleNeck(nn.Module):
-    # output channel / input channel
-    # expands the shortcut
-    expansion = 4
-    # downsample: a 1x1 convolution
-    def __init__(self, in_channel, out_channel, stride=1):
-        super(BottleNeck, self).__init__()
-
-        #     input (256channel)
-        #       +----------+
-        # 1x1, 64channel   |
-        #       |ReLU      |
-        # 3x3, 64channel   |
-        #       |ReLU      |
-        # 1x1, 256channel  |
-        #       |          |
-        #       +----------+
-        #       |ReLU
-        #    output
-
-        self.conv1 = ConvBlock(in_channel, out_channel, kernel_size=1, stride=1, padding=0, bias=False)
-
-        self.conv2 = ConvBlock(out_channel, out_channel, kernel_size=3, stride=stride, padding=1, bias=False)
-        
-        self.conv3 = nn.Sequential(
-            nn.Conv2d(out_channel, out_channel * self.expansion, kernel_size=1, stride=1, padding=0, bias=False),
-            nn.BatchNorm2d(out_channel * self.expansion),
-            # no ReLU here
-        )
-
-        self.shortcut = nn.Sequential(
-            nn.Conv2d(in_channel, out_channel * self.expansion, kernel_size=1, stride=stride, padding=0, bias=False),
-            nn.BatchNorm2d(out_channel * self.expansion),
-        )
-
-    def forward(self, x):
-
-        y = self.conv1(x)
-        y = self.conv2(y)
-        y = self.conv3(y)
-
-        y += self.shortcut(x)
-        y = nn.functional.relu(y)
-        
-        return y
-
-class MyResNet(nn.Module):
-
-    def __init__(self, block, block_num_group, num_classes=1000):
-        super(MyResNet, self).__init__()
-        self.in_channel = 64
-        self.block = block
-
-        self.top_layers = nn.Sequential(
-            nn.Conv2d(3, self.in_channel, 7, stride=2, padding=3, bias=False),
-            nn.BatchNorm2d(self.in_channel),
-            nn.ReLU(),
-            nn.MaxPool2d(3, 2, 1),
-        )
-
-        self.conv2 = self.__make_layer(channel=64,  block_num=block_num_group[0], index=2, stride=1)
-        self.conv3 = self.__make_layer(channel=128, block_num=block_num_group[1], index=3, stride=2)
-        self.conv4 = self.__make_layer(channel=256, block_num=block_num_group[2], index=4, stride=2)
-        self.conv5 = self.__make_layer(channel=512, block_num=block_num_group[3], index=5, stride=2)
-
-        self.outpool = nn.AvgPool2d(7)
-        self.fc      = nn.Linear(512 * self.block.expansion, num_classes)
-
-    def __make_layer(self, channel, block_num, index, stride=1):
-        
-        # block:     block
-        # channel:   output channels of this group
-        # block_num: number of blocks
-
-        stride_list = [stride] + [1] * (block_num - 1)
-        # the first strides is 2, the others are ones.
-        layers = nn.Sequential()
-        for i in range(len(stride_list)):
-            layer_name = f"block_{index}_{i}"
-            layers.add_module(layer_name, self.block(self.in_channel, channel, stride_list[i]))
-            self.in_channel = channel * self.block.expansion
-        return layers
-    
-    def forward(self, x):
-
-        y = self.top_layers(x)
-        y = self.conv2(y)
-        y = self.conv3(y)
-        y = self.conv4(y)
-        y = self.conv5(y)
-        y = self.outpool(y)
-        y = torch.flatten(y, 1)
-        y = self.fc(y)
-        y = nn.functional.softmax(y, dim=1)
-        return y
-
-
-def MyResNet18(num_classes=1000):
-    return MyResNet(block=BasicBlock, block_num_group=[2, 2, 2, 2], num_classes=num_classes)
-
-def MyResNet34(num_classes=1000):
-    return MyResNet(block=BasicBlock, block_num_group=[3, 4, 6, 3], num_classes=num_classes)
-
-def MyResNet50(num_classes=1000):
-    return MyResNet(block=BottleNeck, block_num_group=[3, 4, 6, 3], num_classes=num_classes)
-
-def MyResNet101(num_classes=1000):
-    return MyResNet(block=BottleNeck, block_num_group=[3, 4, 23, 3], num_classes=num_classes)
-
-def MyResNet152(num_classes=1000):
-    return MyResNet(block=BottleNeck, block_num_group=[3, 8, 36, 3], num_classes=num_classes)
