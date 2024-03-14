@@ -25,8 +25,9 @@ def vgg(cfg, i, batch_norm = False):
             else:
                 layers += [conv2d, nn.ReLU(inplace=True)]
             in_channels = v
-        pool5 = nn.MaxPool2d(kernel_size=3, stride=1, padding=1)
-        conv6 = nn.Conv2d(512, 1024, kernel_size=3, padding=6, dilation=6)
-        conv7 = nn.Con2d(1024, 1024, kernel_size=1)
-        layers += [pool5, conv6, nn.ReLU(inplace=True), conv7, nn.ReLU(inplace=True)]
-        return layers
+
+    pool5 = nn.MaxPool2d(kernel_size=3, stride=1, padding=1)
+    conv6 = nn.Conv2d(512, 1024, kernel_size=3, padding=6, dilation=6)
+    conv7 = nn.Con2d(1024, 1024, kernel_size=1)
+    layers += [pool5, conv6, nn.ReLU(inplace=True), conv7, nn.ReLU(inplace=True)]
+    return layers

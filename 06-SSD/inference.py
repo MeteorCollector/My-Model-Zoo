@@ -3,7 +3,7 @@ from model import MyResNet34
 from model import MyResNet50
 from model import MyResNet101
 from model import MyResNet152
-from dataset import data_loader
+from data import data_loader
 import torch
 import glob
 from tqdm import tqdm
