@@ -184,12 +184,11 @@ class MySSD(nn.Module):
 
         if self.phase == "test":
             # 这里用到了 detect 对象, 该对象主要由于接预测出来的结果进行解析, 以获得方便可视化的边框坐标和类别编号
-            output = self.detect(
+            output = self.detect.forward(
                 loc.view(loc.size(0), -1, 4), #  又将shape转换成: [batch, num_boxes, 4], 即[1, 8732, 4]
                 self.softmax(conf.view(conf.size(0), -1, self.num_classes)), # 同理,  shape 为[batch, num_boxes, num_classes], 即 [1, 8732, 21]
-                self.priors(x.data)
+                self.priors
                 # 利用 PriorBox 对象获取 feature map 上的 default box, 该参数的shape为: [8732,4]. 关于生成 default box 的方法实际上很简单, 类似于 anchor box, 详细的代码实现会在后文解析.
-                # 这里原来的的 self.priors.type(type(x.data)) 与 self.priors 就结果而言完全等价(自己试验过了), 但是为什么?
                 # 这里源码的可读性差得令人发指，我真的快崩溃了
             )
         if self.phase == "train": # 如果是训练阶段, 则无需解析预测结果, 直接返回然后求损失.
