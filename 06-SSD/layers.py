@@ -20,6 +20,8 @@ class PriorBox(object):
         self.image_size = cfg["min_dim"]
         self.num_priors = len(cfg["aspect_ratios"])
         self.variance = cfg["variance"] or [0.1]
+        self.feature_maps = cfg['feature_maps']
+        
         self.min_sizes = cfg["min_sizes"]
         self.max_sizes = cfg["max_sizes"]
         self.steps = cfg["steps"]

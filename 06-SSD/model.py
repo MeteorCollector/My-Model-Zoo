@@ -64,21 +64,21 @@ def MultiBox(vgg, extras, num_classes):
     conf_layers = []
 
     # location prediction (bounding-box regression) layer
-    loc1 = nn.Conv2d(  vgg[21].out_channels, 4 * 4, 3, stride=1) # conv4_3 
-    loc2 = nn.Conv2d(  vgg[-2].out_channels, 6 * 4, 3, stride=1) # conv7
-    loc3 = nn.Conv2d(extras[1].out_channels, 6 * 4, 3, stride=1) # exts1_2
-    loc4 = nn.Conv2d(extras[3].out_channels, 6 * 4, 3, stride=1) # exts2_2
-    loc5 = nn.Conv2d(extras[5].out_channels, 4 * 4, 3, stride=1) # exts3_2
-    loc6 = nn.Conv2d(extras[7].out_channels, 4 * 4, 3, stride=1) # exts4_2
+    loc1 = nn.Conv2d(  vgg[21].out_channels, 4 * 4, 3, stride=1, padding=1) # conv4_3 
+    loc2 = nn.Conv2d(  vgg[-2].out_channels, 6 * 4, 3, stride=1, padding=1) # conv7
+    loc3 = nn.Conv2d(extras[1].out_channels, 6 * 4, 3, stride=1, padding=1) # exts1_2
+    loc4 = nn.Conv2d(extras[3].out_channels, 6 * 4, 3, stride=1, padding=1) # exts2_2
+    loc5 = nn.Conv2d(extras[5].out_channels, 4 * 4, 3, stride=1, padding=1) # exts3_2
+    loc6 = nn.Conv2d(extras[7].out_channels, 4 * 4, 3, stride=1, padding=1) # exts4_2
     loc_layers = [loc1, loc2, loc3, loc4, loc5, loc6]
 
     # classifier layer
-    conf1 = nn.Conv2d(  vgg[21].out_channels, 4 * num_classes, 3, stride=1) # conv4_3 
-    conf2 = nn.Conv2d(  vgg[-2].out_channels, 6 * num_classes, 3, stride=1) # conv7
-    conf3 = nn.Conv2d(extras[1].out_channels, 6 * num_classes, 3, stride=1) # exts1_2
-    conf4 = nn.Conv2d(extras[3].out_channels, 6 * num_classes, 3, stride=1) # exts2_2
-    conf5 = nn.Conv2d(extras[5].out_channels, 4 * num_classes, 3, stride=1) # exts3_2
-    conf6 = nn.Conv2d(extras[7].out_channels, 4 * num_classes, 3, stride=1) # exts4_2
+    conf1 = nn.Conv2d(  vgg[21].out_channels, 4 * num_classes, 3, stride=1, padding=1) # conv4_3 
+    conf2 = nn.Conv2d(  vgg[-2].out_channels, 6 * num_classes, 3, stride=1, padding=1) # conv7
+    conf3 = nn.Conv2d(extras[1].out_channels, 6 * num_classes, 3, stride=1, padding=1) # exts1_2
+    conf4 = nn.Conv2d(extras[3].out_channels, 6 * num_classes, 3, stride=1, padding=1) # exts2_2
+    conf5 = nn.Conv2d(extras[5].out_channels, 4 * num_classes, 3, stride=1, padding=1) # exts3_2
+    conf6 = nn.Conv2d(extras[7].out_channels, 4 * num_classes, 3, stride=1, padding=1) # exts4_2
     conf_layers = [conf1, conf2, conf3, conf4, conf5, conf6]
 
     return vgg, extras, (loc_layers, conf_layers)
@@ -169,8 +169,8 @@ class MySSD(nn.Module):
             # 因此, 这里的排列是将其改为 $(N, H, W, C)$.
             # contiguous返回内存连续的tensor, 由于在执行permute或者transpose等操作之后, tensor的内存地址可能不是连续的,
             # 然后 view 操作是基于连续地址的, 因此, 需要调用contiguous语句.
-            loc.append(l(x).permute(0,2,3,1).contiguous())
-            conf.append(c(x).permute(0,2,3,1).contiguous())
+            loc.append(l(x).permute(0, 2, 3, 1).contiguous())
+            conf.append(c(x).permute(0, 2, 3, 1).contiguous())
             # loc:  [b×w1×h1×4*4, b×w2×h2×6*4, b×w3×h3×6*4, b×w4×h4×6*4, b×w5×h5×4*4, b×w6×h6×4*4]
             # conf: [b×w1×h1×4*C, b×w2×h2×6*C, b×w3×h3×6*C, b×w4×h4×6*C, b×w5×h5×4*C, b×w6×h6×4*C] C为num_classes
         
@@ -231,7 +231,7 @@ def build_ssd(phase, size=300, num_classes=21):
                 "currently only SSD300 is supported!") # 仅仅支持300size的SSD
         return
     base_, extras_, head_ = MultiBox(vgg(base[str(size)], 3),
-                                    ExtraFeature,
+                                    ExtraFeature(),
                                     num_classes)
     
     return MySSD(phase, size, base_, extras_, head_, num_classes)

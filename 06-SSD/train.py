@@ -15,6 +15,7 @@ import torch.utils.data as data
 import numpy as np
 import argparse
 import visdom
+from tqdm import tqdm
 
 
 def str2bool(v):
@@ -55,8 +56,18 @@ parser.add_argument('--save_folder', default='weights/',
 args = parser.parse_args()
 
 
+
+
+
+# we specify some arguments here.
+args.dataset = 'VOC'
+# we only use COCO here.
+args.cuda = True
+args.visdom = False
+
 if torch.cuda.is_available():
     if args.cuda:
+        print("INFO: Set device to cuda.")
         torch.set_default_tensor_type('torch.cuda.FloatTensor')
     if not args.cuda:
         print("WARNING: It looks like you have a CUDA device, but aren't " +
@@ -67,6 +78,7 @@ else:
 
 if not os.path.exists(args.save_folder):
     os.mkdir(args.save_folder)
+
 
 
 def train():
@@ -144,21 +156,30 @@ def train():
         iter_plot = create_vis_plot('Iteration', 'Loss', vis_title, vis_legend)
         epoch_plot = create_vis_plot('Epoch', 'Loss', vis_title, vis_legend)
 
-    data_loader = data.DataLoader(dataset, args.batch_size,
+    if args.cuda:
+        data_loader = data.DataLoader(dataset, args.batch_size,
+                                  num_workers=args.num_workers,
+                                  shuffle=True, collate_fn=detection_collate,
+                                  pin_memory=True,
+                                  generator=torch.Generator(device='cuda'))
+    else:
+        data_loader = data.DataLoader(dataset, args.batch_size,
                                   num_workers=args.num_workers,
                                   shuffle=True, collate_fn=detection_collate,
                                   pin_memory=True)
+    
+    
     # 迭代训练
     # create batch iterator
     batch_iterator = iter(data_loader)
     for iteration in range(args.start_iter, cfg['max_iter']):
-        if args.visdom and iteration != 0 and (iteration % epoch_size == 0):
-            update_vis_plot(epoch, loc_loss, conf_loss, epoch_plot, None,
-                            'append', epoch_size)
-            # reset epoch loss counters
-            loc_loss = 0
-            conf_loss = 0
-            epoch += 1
+        # if args.visdom and iteration != 0 and (iteration % epoch_size == 0):
+        #     update_vis_plot(epoch, loc_loss, conf_loss, epoch_plot, None,
+        #                     'append', epoch_size)
+        #     # reset epoch loss counters
+        #     loc_loss = 0
+        #     conf_loss = 0
+        #     epoch += 1
 
         if iteration in cfg['lr_steps']:
             step_index += 1
@@ -177,23 +198,25 @@ def train():
         # forward
         t0 = time.time()
         out = model(images)
-        # backprop
+        # backward
         optimizer.zero_grad()
         loss_l, loss_c = criterion(out, targets)
         loss = loss_l + loss_c
         loss.backward()
         optimizer.step()
         t1 = time.time()
-        loc_loss += loss_l.data[0]
-        conf_loss += loss_c.data[0]
+        # cancel visdom code
+        # loc_loss += loss_l.item()
+        # conf_loss += loss_c.item()
 
-        if iteration % 10 == 0:
-            print('timer: %.4f sec.' % (t1 - t0))
-            print('iter ' + repr(iteration) + ' || Loss: %.4f ||' % (loss.data[0]), end=' ')
+        # if iteration % 10 == 0:
+        print('timer: %.4f sec.' % (t1 - t0))
+        print(loss)
+        print('iter ' + repr(iteration) + ' || Loss: %.4f ||' % (loss.item()), end=' ')
 
-        if args.visdom:
-            update_vis_plot(iteration, loss_l.data[0], loss_c.data[0],
-                            iter_plot, epoch_plot, 'append')
+        # if args.visdom:
+        #     update_vis_plot(iteration, loss_l.data[0], loss_c.data[0],
+        #                     iter_plot, epoch_plot, 'append')
 
         if iteration != 0 and iteration % 5000 == 0:
             print('Saving state, iter:', iteration)

@@ -3,8 +3,8 @@ from torchvision import transforms
 import cv2
 import numpy as np
 import types
+from random import choice as new_choice
 from numpy import random
-
 
 def intersect(box_a, box_b):
     max_xy = np.minimum(box_a[:, 2:], box_b[2:])
@@ -235,7 +235,7 @@ class RandomSampleCrop(object):
         height, width, _ = image.shape
         while True:
             # randomly choose a mode
-            mode = random.choice(self.sample_options)
+            mode = new_choice(self.sample_options)
             if mode is None:
                 return image, boxes, labels
 
