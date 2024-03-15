@@ -204,37 +204,3 @@ class yolo_loss:
             conf_loss[i]  = torch.sum(l[2])
             class_loss[i] = torch.sum(l[3])
         return torch.sum(loss), torch.sum(xy_loss), torch.sum(wh_loss), torch.sum(conf_loss), torch.sum(class_loss)
-
-
-if __name__ == "__main__":
-    import torch
-
-    # Test yolo
-    x = torch.randn([1, 3, 448, 448])
-
-    # B * 5 + n_classes
-    model = MyYOLO(7, 2 * 5 + 20)
-    # net = yolo(7, 2 * 5 + 20, 'darknet', pretrain=None)
-    print(model)
-    out = model(x)
-    print(out)
-    print(out.size())
-
-    # Test yolo_loss
-    # 测试时假设 s=2, class=2
-    S = 2
-    B = 2
-    image_size = 448  # h, w
-    input = torch.tensor([[[0.45, 0.24, 0.22, 0.3, 0.35, 0.54, 0.66, 0.7, 0.8, 0.8, 0.17, 0.9],
-                           [0.37, 0.25, 0.5, 0.3, 0.36, 0.14, 0.27, 0.26, 0.33, 0.36, 0.13, 0.9],
-                           [0.12, 0.8, 0.26, 0.74, 0.8, 0.13, 0.83, 0.6, 0.75, 0.87, 0.75, 0.24],
-                           [0.1, 0.27, 0.24, 0.37, 0.34, 0.15, 0.26, 0.27, 0.37, 0.34, 0.16, 0.93]]])
-    target = [torch.tensor([[200, 200, 353, 300, 1],
-                            [220, 230, 353, 300, 1],
-                            [15, 330, 200, 400, 0],
-                            [100, 50, 198, 223, 1],
-                            [30, 60, 150, 240, 1]], dtype=torch.float)]
-
-    criterion = yolo_loss('cpu', S, B, image_size, 2)
-    loss = criterion(input, target)
-    print(loss)
